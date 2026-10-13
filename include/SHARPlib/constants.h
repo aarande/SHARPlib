@@ -15,6 +15,16 @@
 #ifndef SHARP_CONSTANTS_H
 #define SHARP_CONSTANTS_H
 
+#if defined(__CUDACC__) || defined(__HIPCC__)
+    #define SHARP_HD __host__ __device__
+    #define SHARP_DEVICE __device__
+    #define SHARP_FORCEINLINE __forceinline__
+#else
+    #define SHARP_HD
+    #define SHARP_DEVICE
+    #define SHARP_FORCEINLINE inline
+#endif
+
 namespace sharp {
 
 // Molar gas constant (J / mol / K)
