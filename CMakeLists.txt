@@ -55,6 +55,7 @@ set_target_properties(SHARPlib PROPERTIES
 )
 
 if(MSVC)
+    target_compile_options(SHARPlib PUBLIC /EHsc)
     target_compile_options(SHARPlib PRIVATE
         /W3 /utf-8 /fp:precise
         /wd4244 /wd4305

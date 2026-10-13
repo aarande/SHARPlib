@@ -29,7 +29,7 @@ namespace sharp {
  *
  * \return  Whether value is sharp::MISSING or NaN
  */
-[[nodiscard]] inline bool is_missing(const float value) {
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE bool is_missing(const float value) {
     return !std::islessgreater(value, MISSING);
 }
 

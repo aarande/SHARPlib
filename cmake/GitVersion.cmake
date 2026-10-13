@@ -29,6 +29,13 @@ function(get_project_version)
         set(PROJECT_VERSION_PATCH ${CMAKE_MATCH_1}) # Extract from ".<patch>"
 
         # You can add more detailed parsing here if needed for the C++ header
+        if(NOT PROJECT_VERSION)
+            set(PROJECT_VERSION "1.4.3")
+            set(PROJECT_VERSION_MAJOR "1")
+            set(PROJECT_VERSION_MINOR "4")
+            set(PROJECT_VERSION_PATCH "3")
+            set(FULL_VERSION "1.4.3-${FULL_VERSION}")
+        endif()
         set(PRE_RELEASE "" PARENT_SCOPE)
         set(BUILD_METADATA "" PARENT_SCOPE)
         set(IS_DIRTY 0 PARENT_SCOPE)

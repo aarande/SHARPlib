@@ -17,7 +17,9 @@
 #include <SHARPlib/constants.h>
 #include <SHARPlib/interp.h>
 #include <SHARPlib/layer.h>
+#include <SHARPlib/qc.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -82,7 +84,30 @@ enum class adiabat : int {
  *
  * \return  wobf            (K)
  */
-[[nodiscard]] float wobf(float temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float wobf(float temperature) {
+#ifndef NO_QC
+    if (is_missing(temperature)) return MISSING;
+#endif
+    float pol;
+    const float x = temperature - ZEROCNK - 20.0f;
+    if (x <= 0.0f) {
+        pol = 1.0f +
+              x * (-8.841660499999999e-03f +
+                   x * (1.4714143e-04f +
+                        x * (-9.671989000000001e-07f +
+                             x * (-3.2607217e-08f + x * (-3.8598073e-10f)))));
+        pol = pol * pol;
+        return (15.13f / (pol * pol)) + ZEROCNK;
+    } else {
+        pol = x * (4.9618922e-07f +
+                   x * (-6.1059365e-09f +
+                        x * (3.9401551e-11f +
+                             x * (-1.2588129e-13f + x * (1.6688280e-16f)))));
+        pol = 1.0f + x * (3.6182989e-03f + x * (-1.3603273e-05f + pol));
+        pol = pol * pol;
+        return (29.93f / (pol * pol) + 0.96f * x - 14.8f) + ZEROCNK;
+    }
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -103,7 +128,15 @@ enum class adiabat : int {
  *
  * \return  vapor_pressure (Pa)
  */
-[[nodiscard]] float vapor_pressure(float pressure, float temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float vapor_pressure(float pressure, float temperature) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (pressure == MISSING)) return MISSING;
+#endif
+    const float tmpc = temperature - ZEROCNK;
+    const float es = 611.2f * std::exp(17.67f * tmpc / (temperature - 29.65f));
+    // for extremely cold temperatures
+    return std::min(es, pressure * 0.5f);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -124,7 +157,16 @@ enum class adiabat : int {
  *
  * \return  vapor_pressure (Pa)
  */
-[[nodiscard]] float vapor_pressure_ice(float pressure, float temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float vapor_pressure_ice(float pressure, float temperature) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (pressure == MISSING)) return MISSING;
+#endif
+    const float tmpc = temperature - ZEROCNK;
+    const float es =
+        611.2f * std::exp(21.8745584f * tmpc / (temperature - 7.66f));
+    // for extremely cold temperatures
+    return std::min(es, pressure * 0.5f);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -143,7 +185,19 @@ enum class adiabat : int {
  *
  * \return   lcl_temperature (K)
  */
-[[nodiscard]] float lcl_temperature(float temperature, float dewpoint);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float lcl_temperature(float temperature, float dewpoint) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (dewpoint == MISSING)) {
+        return MISSING;
+    }
+#endif
+    constexpr float c1 = 56.0f;
+    constexpr float c2 = 800.0f;
+
+    const float term_1 = 1.0f / (dewpoint - c1);
+    const float term_2 = std::log(temperature / dewpoint) / c2;
+    return (1.0f / (term_1 + term_2)) + c1;
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -163,7 +217,19 @@ enum class adiabat : int {
  *
  * \return   temperature    (K)
  */
-[[nodiscard]] float temperature_at_mixratio(float wv_mixratio, float pressure);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float temperature_at_mixratio(float wv_mixratio, float pressure) {
+#ifndef NO_QC
+    if ((wv_mixratio == MISSING) || (pressure == MISSING)) {
+        return MISSING;
+    }
+#endif
+    float es = (wv_mixratio / EPSILON) * pressure / 100.0f /
+               (1.0f + (wv_mixratio / EPSILON));
+    // for extremely cold temperatures
+    es = std::min(es, pressure * 0.5f);
+    const float el = std::log(es);
+    return ZEROCNK + (243.5f * el - 440.8f) / (19.48f - el);
+}
 
 /**
  * \author John Hart - NSSFC KCMO / NWSSPC OUN
@@ -179,7 +245,16 @@ enum class adiabat : int {
  *
  * \return   pressure              (Pa)
  */
-[[nodiscard]] float theta_level(float potential_temperature, float temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float theta_level(float potential_temperature, float temperature) {
+#ifndef NO_QC
+    if ((potential_temperature == MISSING) || (temperature == MISSING)) {
+        return MISSING;
+    }
+#endif
+    constexpr float CPOR = CP_DRYAIR / RDGAS;
+    return THETA_REF_PRESSURE /
+           std::pow((potential_temperature / temperature), CPOR);
+}
 
 /**
  * \author John Hart - NSSFC KCMO / NWSSPC OUN
@@ -198,8 +273,16 @@ enum class adiabat : int {
  *
  * \return   potential_temperature (K)
  */
-[[nodiscard]] float theta(float pressure, float temperature,
-                          float ref_pressure = THETA_REF_PRESSURE);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float theta(float pressure, float temperature,
+                                                     float ref_pressure = THETA_REF_PRESSURE) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (pressure == MISSING) ||
+        (ref_pressure == MISSING)) {
+        return MISSING;
+    }
+#endif
+    return (temperature * std::pow(ref_pressure / pressure, ROCP));
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -213,7 +296,12 @@ enum class adiabat : int {
  *
  * \return   mixratio   (kg/kg)
  */
-[[nodiscard]] float mixratio(float q);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float mixratio(float q) {
+#ifndef NO_QC
+    if (q == MISSING) return MISSING;
+#endif
+    return q / (1.0f - q);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -232,7 +320,16 @@ enum class adiabat : int {
  *
  * \return   mixratio              (kg/kg)
  */
-[[nodiscard]] float mixratio(float pressure, float temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float mixratio(float pressure, float temperature) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (pressure == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    const float e = vapor_pressure(pressure, temperature);
+    return (EPSILON * e) / (pressure - e);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -251,7 +348,15 @@ enum class adiabat : int {
  *
  * \return   mixratio              (kg/kg)
  */
-[[nodiscard]] float mixratio_ice(float pressure, float temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float mixratio_ice(float pressure, float temperature) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (pressure == MISSING)) {
+        return MISSING;
+    }
+#endif
+    const float e = vapor_pressure_ice(pressure, temperature);
+    return (EPSILON * e) / (pressure - e);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -264,7 +369,12 @@ enum class adiabat : int {
  *
  * \return  specific_humidity   (unitless)
  */
-[[nodiscard]] float specific_humidity(float rv);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float specific_humidity(float rv) {
+#ifndef NO_QC
+    if (rv == MISSING) return MISSING;
+#endif
+    return rv / (1.0f + rv);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -283,8 +393,20 @@ enum class adiabat : int {
  *
  * \return  Relative Humidity (fraction, unitless)
  */
-[[nodiscard]] float relative_humidity(float pressure, float temperature,
-                                      float dewpoint);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float relative_humidity(float pressure, float temperature,
+                                                                 float dewpoint) {
+#ifndef NO_QC
+    if ((pressure == MISSING) || (temperature == MISSING) ||
+        (dewpoint == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    const float vapor_pres = vapor_pressure(pressure, dewpoint);
+    const float saturation_vapor_pres = vapor_pressure(pressure, temperature);
+
+    return vapor_pres / saturation_vapor_pres;
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -306,8 +428,16 @@ enum class adiabat : int {
  *
  * \return  virtual_temperature     (K)
  */
-[[nodiscard]] float virtual_temperature(float temperature, float rv,
-                                        float rl = 0.0f, float ri = 0.0f);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float virtual_temperature(float temperature, float rv,
+                                                                   float rl = 0.0f, float ri = 0.0f) {
+#ifndef NO_QC
+    if ((rv == MISSING) || (rl == MISSING) || (ri == MISSING) ||
+        (temperature == MISSING)) {
+        return MISSING;
+    }
+#endif
+    return (temperature * ((1.0f + (rv / EPSILON)) / (1.0f + rv + rl + ri)));
+}
 
 /**
  * \author John Hart - NSSFC KCMO / NWSSPC OUN
@@ -331,8 +461,42 @@ enum class adiabat : int {
  *
  * \return  lifted_temperature  (K)
  */
-[[nodiscard]] float saturated_lift(float pressure, float theta_sat,
-                                   float converge = 0.001f);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float saturated_lift(float pressure, float theta_sat,
+                                                              float converge = 0.001f) {
+#ifndef NO_QC
+    if ((pressure == MISSING) || (theta_sat == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    if (std::fabs(pressure - THETA_REF_PRESSURE) <= converge) return theta_sat;
+
+    const float pwrp = std::pow(pressure / THETA_REF_PRESSURE, ROCP);
+    // get the temperature
+    float t1 = theta_sat * pwrp;
+    float e1 = wobf(t1) - wobf(theta_sat);
+    float rate = 1.0f;
+    float eor = 999.0f;
+    float t2 = t1;
+    int condition = 0;
+    // Testing the original showed that only
+    // 5 or so iterations are needed, but
+    // double that just in case. It'll exit
+    // early if it converges anyway.
+    for (int iter = 0; iter < 10; ++iter) {
+        t2 = t1 - e1 * rate;
+        float e2 = (t2) / pwrp;
+        e2 = e2 + wobf(t2) - wobf(e2) - theta_sat;
+
+        eor = e2 * rate;
+        rate = (t2 - t1) / (e2 - e1);
+        t1 = t2;
+        e1 = e2;
+        condition |= (std::fabs(eor) <= converge);
+        if (condition) break;
+    }
+    return t2 - eor;
+}
 
 /**
  * \author John Hart - NSSFC KCMO / NWSSPC OUN
@@ -358,8 +522,26 @@ enum class adiabat : int {
  *
  * \return   lifted_temperature    (K)
  */
-[[nodiscard]] float wetlift(float pressure, float temperature,
-                            float lifted_pressure, float converge = 0.001f);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float wetlift(float pressure, float temperature,
+                                                       float lifted_pressure, float converge = 0.001f) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (pressure == MISSING) ||
+        (lifted_pressure == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    // parcels potential temperature
+    const float pcl_theta = theta(pressure, temperature, THETA_REF_PRESSURE);
+    // some Wobus voodo
+    const float woth = wobf(pcl_theta);
+    const float wott = wobf(temperature);
+    // This is the wet bulb potential temperature
+    const float pcl_thetaw = pcl_theta - woth + wott;
+    // get the temperature that crosses the moist adiabat at
+    // this pressure level
+    return saturated_lift(lifted_pressure, pcl_thetaw, converge);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -428,8 +610,26 @@ enum class adiabat : int {
  *
  * \param    temperature_at_lcl    (K)
  */
-void drylift(float pressure, float temperature, float dewpoint,
-             float& pressure_at_lcl, float& temperature_at_lcl);
+SHARP_HD SHARP_FORCEINLINE void drylift(float pressure, float temperature, float dewpoint,
+                                        float& pressure_at_lcl, float& temperature_at_lcl) {
+#ifndef NO_QC
+    if ((pressure == MISSING) || (temperature == MISSING) ||
+        (dewpoint == MISSING)) {
+        pressure_at_lcl = MISSING;
+        temperature_at_lcl = MISSING;
+        return;
+    }
+#endif
+
+    // theta is constant from parcel level to LCL
+    const float pcl_theta = theta(pressure, temperature, THETA_REF_PRESSURE);
+
+    temperature_at_lcl = lcl_temperature(temperature, dewpoint);
+    pressure_at_lcl = theta_level(pcl_theta, temperature_at_lcl);
+
+    if (pressure_at_lcl > pressure) pressure_at_lcl = pressure;
+    return;
+}
 
 /**
  * \author John Hart - NSSFC KCMO / NWSSPC OUN
@@ -456,8 +656,8 @@ void drylift(float pressure, float temperature, float dewpoint,
  * \return  wetbulb_temperature     (K)
  */
 template <typename Lft>
-[[nodiscard]] float wetbulb(Lft& lifter, float pressure, float temperature,
-                            float dewpoint) {
+[[nodiscard]] SHARP_HD inline float wetbulb(Lft& lifter, float pressure, float temperature,
+                                            float dewpoint) {
 #ifndef NO_QC
     if ((pressure == MISSING) || (temperature == MISSING) ||
         (dewpoint == MISSING)) {
@@ -503,8 +703,8 @@ template <typename Lft>
  * \return  wetbulb_potential_temperature   (K)
  */
 template <typename Lft>
-[[nodiscard]] float theta_wetbulb(Lft& lifter, float pressure,
-                                  float temperature, float dewpoint) {
+[[nodiscard]] SHARP_HD inline float theta_wetbulb(Lft& lifter, float pressure,
+                                                  float temperature, float dewpoint) {
 #ifndef NO_QC
     if ((pressure == MISSING) || (temperature == MISSING) ||
         (dewpoint == MISSING)) {
@@ -544,7 +744,31 @@ template <typename Lft>
  *
  * \return   equivalent_potential_temperature   (K)
  */
-[[nodiscard]] float thetae(float pressure, float temperature, float dewpoint);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float thetae(float pressure, float temperature, float dewpoint) {
+#ifndef NO_QC
+    if ((pressure == MISSING) || (temperature == MISSING) ||
+        (dewpoint == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    float pressure_at_lcl = MISSING;
+    float temperature_at_lcl = MISSING;
+    const float mixr = mixratio(pressure, dewpoint);
+    const float vappres = vapor_pressure(pressure, temperature);
+
+    // pressure_at_lcl and temperature_at_lcl are passed by reference,
+    // so the values are changed by the drylift routine
+    drylift(pressure, temperature, dewpoint, pressure_at_lcl,
+            temperature_at_lcl);
+    const float theta_lcl_dry =
+        theta(pressure - vappres, temperature) *
+        std::pow((temperature / temperature_at_lcl), (0.28f * mixr));
+    const float thetae_val =
+        theta_lcl_dry * std::exp(mixr * (1.0f + 0.448f * mixr) *
+                                 (3036.0f / temperature_at_lcl - 1.78f));
+    return thetae_val;
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -665,8 +889,15 @@ template <typename Lft>
  *
  * \return  buoyancy            (m/s^2)
  */
-[[nodiscard]] float buoyancy(const float pcl_temperature,
-                             const float env_temperature);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float buoyancy(const float pcl_temperature,
+                                                        const float env_temperature) {
+#ifndef NO_QC
+    if ((pcl_temperature == MISSING) || (env_temperature == MISSING)) {
+        return MISSING;
+    }
+#endif
+    return GRAVITY * (pcl_temperature - env_temperature) / (env_temperature);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -692,8 +923,18 @@ void buoyancy(const float pcl_temperature[], const float env_temperature[],
  *
  * \return  moist static energy ()
  */
-[[nodiscard]] float moist_static_energy(float height_agl, float temperature,
-                                        float specific_humidity);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float moist_static_energy(float height_agl, float temperature,
+                                                                   float specific_humidity) {
+#ifndef NO_QC
+    if ((height_agl == MISSING) || (temperature == MISSING) ||
+        (specific_humidity == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    return (CP_DRYAIR * temperature) + (EXP_LV * specific_humidity) +
+           (GRAVITY * height_agl);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -715,9 +956,18 @@ void buoyancy(const float pcl_temperature[], const float env_temperature[],
 [[nodiscard]] float pbl_top(const float pressure[], const float thetav[],
                             const std::ptrdiff_t N, float offset = 0.5);
 
-[[nodiscard]] float buoyancy_dilution_potential(const float temperature,
-                                                const float mse_bar,
-                                                const float saturation_mse);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float buoyancy_dilution_potential(const float temperature,
+                                                                           const float mse_bar,
+                                                                           const float saturation_mse) {
+#ifndef NO_QC
+    if ((temperature == MISSING) || (mse_bar == MISSING) ||
+        (saturation_mse == MISSING)) {
+        return MISSING;
+    }
+#endif
+    return -1.0f * (GRAVITY / (CP_DRYAIR * temperature)) *
+           (mse_bar - saturation_mse);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center

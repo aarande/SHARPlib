@@ -14,10 +14,12 @@
 #ifndef SHARP_WINDS_H
 #define SHARP_WINDS_H
 
+#include <SHARPlib/algorithms.h>
 #include <SHARPlib/constants.h>
 #include <SHARPlib/interp.h>
 #include <SHARPlib/layer.h>
 
+#include <cmath>
 #include <cstddef>
 
 namespace sharp {
@@ -37,6 +39,9 @@ struct WindVector {
      * \brief The direction (degrees from North) of a wind vector.
      */
     float direction;
+
+    SHARP_HD constexpr WindVector() : speed(0.0f), direction(0.0f) {}
+    SHARP_HD constexpr WindVector(float spd, float dir) : speed(spd), direction(dir) {}
 };
 
 /**
@@ -54,6 +59,9 @@ struct WindComponents {
      * \brief The meridional (V) component of a wind vector.
      */
     float v;
+
+    SHARP_HD constexpr WindComponents() : u(0.0f), v(0.0f) {}
+    SHARP_HD constexpr WindComponents(float u_comp, float v_comp) : u(u_comp), v(v_comp) {}
 };
 
 /**
@@ -69,7 +77,13 @@ struct WindComponents {
  *
  * \return  u_component     (m/s)
  */
-[[nodiscard]] float u_component(float wind_speed, float wind_direction);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float u_component(float wind_speed, float wind_direction) {
+#ifndef NO_QC
+    if ((wind_direction == MISSING) || (wind_speed == MISSING)) return MISSING;
+#endif
+    wind_direction *= (PI / 180.0f);
+    return -1.0f * wind_speed * std::sin(wind_direction);
+}
 
 /**
  *
@@ -85,7 +99,13 @@ struct WindComponents {
  *
  * \return  v_component     (m/s)
  */
-[[nodiscard]] float v_component(float wind_speed, float wind_direction);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float v_component(float wind_speed, float wind_direction) {
+#ifndef NO_QC
+    if ((wind_direction == MISSING) || (wind_speed == MISSING)) return MISSING;
+#endif
+    wind_direction *= (PI / 180.0f);
+    return -1.0f * wind_speed * std::cos(wind_direction);
+}
 
 /**
  *
@@ -101,7 +121,18 @@ struct WindComponents {
  *
  * \return  wind_direction  (degrees from North)
  */
-[[nodiscard]] float vector_angle(float u_comp, float v_comp);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float vector_angle(float u_comp, float v_comp) {
+#ifndef NO_QC
+    if ((u_comp == MISSING) || (v_comp == MISSING)) return MISSING;
+#endif
+    if ((u_comp == 0.0f) && (v_comp == 0.0f)) return 0.0f;
+
+    float wind_direction =
+        std::atan2(-1.0f * u_comp, -1.0f * v_comp) * (180.0f / PI);
+    if (wind_direction < 0.0f) wind_direction += 360.0f;
+    if (wind_direction < TOL) wind_direction = 0.0f;
+    return wind_direction;
+}
 
 /**
  *
@@ -117,7 +148,12 @@ struct WindComponents {
  *
  * \return  wind_speed  (m/s)
  */
-[[nodiscard]] float vector_magnitude(float u_comp, float v_comp);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float vector_magnitude(float u_comp, float v_comp) {
+#ifndef NO_QC
+    if ((u_comp == MISSING) || (v_comp == MISSING)) return MISSING;
+#endif
+    return std::sqrt((u_comp * u_comp) + (v_comp * v_comp));
+}
 
 /**
  *
@@ -139,7 +175,12 @@ struct WindComponents {
  *
  * \return  wind_speed  (m/s)
  */
-[[nodiscard]] float vector_magnitude_precise(float u_comp, float v_comp);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE float vector_magnitude_precise(float u_comp, float v_comp) {
+#ifndef NO_QC
+    if ((u_comp == MISSING) || (v_comp == MISSING)) return MISSING;
+#endif
+    return std::hypot(u_comp, v_comp);
+}
 
 /**
  *
@@ -157,7 +198,12 @@ struct WindComponents {
  *
  * \return  {wind_speed, wind_direction}
  */
-[[nodiscard]] WindVector components_to_vector(float u_comp, float v_comp);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE WindVector components_to_vector(float u_comp, float v_comp) {
+    const float wind_speed = vector_magnitude(u_comp, v_comp);
+    const float wind_direction = vector_angle(u_comp, v_comp);
+
+    return {wind_speed, wind_direction};
+}
 
 /**
  *
@@ -174,7 +220,12 @@ struct WindComponents {
  *
  * \return  {wind_speed, wind_direction}
  */
-[[nodiscard]] WindVector components_to_vector(WindComponents comp);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE WindVector components_to_vector(WindComponents comp) {
+    const float wind_speed = vector_magnitude(comp.u, comp.v);
+    const float wind_direction = vector_angle(comp.u, comp.v);
+
+    return {wind_speed, wind_direction};
+}
 
 /**
  *
@@ -191,8 +242,18 @@ struct WindComponents {
  *
  * \return  {u_comp, v_comp}
  */
-[[nodiscard]] WindComponents vector_to_components(float wind_speed,
-                                                  float wind_direction);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE WindComponents vector_to_components(float wind_speed,
+                                                                             float wind_direction) {
+#ifndef NO_QC
+    if ((wind_direction == MISSING) || (wind_speed == MISSING))
+        return {MISSING, MISSING};
+#endif
+    wind_direction *= (PI / 180.0f);
+    const float u_comp = -1.0f * wind_speed * std::sin(wind_direction);
+    const float v_comp = -1.0f * wind_speed * std::cos(wind_direction);
+
+    return {u_comp, v_comp};
+}
 
 /**
  *
@@ -208,7 +269,17 @@ struct WindComponents {
  *
  * \return  {u_comp, v_comp}
  */
-[[nodiscard]] WindComponents vector_to_components(WindVector vect);
+[[nodiscard]] SHARP_HD SHARP_FORCEINLINE WindComponents vector_to_components(WindVector vect) {
+#ifndef NO_QC
+    if ((vect.speed == MISSING) || (vect.direction == MISSING))
+        return {MISSING, MISSING};
+#endif
+    const float wind_direction = vect.direction * (PI / 180.0f);
+    const float u_comp = -1.0f * vect.speed * std::sin(wind_direction);
+    const float v_comp = -1.0f * vect.speed * std::cos(wind_direction);
+
+    return {u_comp, v_comp};
+}
 
 /**
  *
@@ -229,11 +300,90 @@ struct WindComponents {
  *
  * \return  {mean_u, mean_v}
  */
-[[nodiscard]] WindComponents mean_wind(PressureLayer layer, const float pres[],
-                                       const float u_wind[],
-                                       const float v_wind[],
-                                       const std::ptrdiff_t N,
-                                       const bool weighted);
+template <typename PresPtr = const float*, typename UPtr = const float*, typename VPtr = const float*>
+[[nodiscard]] SHARP_HD inline WindComponents mean_wind(PressureLayer layer, const PresPtr pressure,
+                                                       const UPtr u_wind,
+                                                       const VPtr v_wind,
+                                                       const std::ptrdiff_t N,
+                                                       const bool weighted) {
+#ifndef NO_QC
+    if ((layer.bottom == MISSING) || (layer.top == MISSING))
+        return {MISSING, MISSING};
+#endif
+
+    if (layer.bottom > pressure[0]) layer.bottom = pressure[0];
+    if (layer.top < pressure[N - 1]) layer.top = pressure[N - 1];
+
+    LayerIndex idx = get_layer_index(layer, pressure, N);
+
+    float u_lyr_bot = interp_pressure(layer.bottom, pressure, u_wind, N);
+    float v_lyr_bot = interp_pressure(layer.bottom, pressure, v_wind, N);
+    float u_lyr_top = interp_pressure(layer.top, pressure, u_wind, N);
+    float v_lyr_top = interp_pressure(layer.top, pressure, v_wind, N);
+
+#ifndef NO_QC
+    if ((u_lyr_bot == MISSING) || (v_lyr_bot == MISSING) ||
+        (u_lyr_top == MISSING) || (v_lyr_top == MISSING)) {
+        return {MISSING, MISSING};
+    }
+#endif
+
+    float u_integ = 0.0f;
+    float v_integ = 0.0f;
+    float w_integ = 0.0f;
+    float dummy_w = 0.0f;
+
+    float p_prev = layer.bottom;
+    float u_prev = u_lyr_bot;
+    float v_prev = v_lyr_bot;
+
+    for (std::ptrdiff_t k = idx.kbot; k <= idx.ktop; ++k) {
+#ifndef NO_QC
+        if ((u_wind[k] == MISSING) || (v_wind[k] == MISSING)) {
+            continue;
+        }
+#endif
+        const float p_curr = pressure[k];
+        const float u_curr = u_wind[k];
+        const float v_curr = v_wind[k];
+
+        if (weighted) {
+            u_integ += _integ_trapz(u_curr * p_curr, u_prev * p_prev, p_curr,
+                                    p_prev, dummy_w, false);
+            v_integ += _integ_trapz(v_curr * p_curr, v_prev * p_prev, p_curr,
+                                    p_prev, dummy_w, false);
+            w_integ +=
+                _integ_trapz(p_curr, p_prev, p_curr, p_prev, dummy_w, false);
+        } else {
+            u_integ +=
+                _integ_trapz(u_curr, u_prev, p_curr, p_prev, w_integ, true);
+            v_integ +=
+                _integ_trapz(v_curr, v_prev, p_curr, p_prev, dummy_w, false);
+        }
+
+        p_prev = p_curr;
+        u_prev = u_curr;
+        v_prev = v_curr;
+    }
+
+    {
+        if (weighted) {
+            u_integ += _integ_trapz(u_lyr_top * layer.top, u_prev * p_prev,
+                                    layer.top, p_prev, dummy_w, false);
+            v_integ += _integ_trapz(v_lyr_top * layer.top, v_prev * p_prev,
+                                    layer.top, p_prev, dummy_w, false);
+            w_integ += _integ_trapz(layer.top, p_prev, layer.top, p_prev,
+                                    dummy_w, false);
+        } else {
+            u_integ += _integ_trapz(u_lyr_top, u_prev, layer.top, p_prev,
+                                    w_integ, true);
+            v_integ += _integ_trapz(v_lyr_top, v_prev, layer.top, p_prev,
+                                    dummy_w, false);
+        }
+    }
+
+    return {u_integ / w_integ, v_integ / w_integ};
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -251,11 +401,11 @@ struct WindComponents {
  *
  * \return {max_u, max_v}
  */
-template <typename Layer>
-[[nodiscard]] WindComponents max_wind(Layer layer, const float coordinate[],
-                                      const float u_wind[],
-                                      const float v_wind[],
-                                      const std::ptrdiff_t N) {
+template <typename Layer, typename CoordPtr = const float*, typename UPtr = const float*, typename VPtr = const float*>
+[[nodiscard]] SHARP_HD inline WindComponents max_wind(Layer layer, const CoordPtr coordinate,
+                                                      const UPtr u_wind,
+                                                      const VPtr v_wind,
+                                                      const std::ptrdiff_t N) {
     LayerIndex lyr_idx = get_layer_index(layer, coordinate, N);
 
     float u_bot, u_top;
@@ -335,11 +485,11 @@ template <typename Layer>
  *
  * \return  {shear_u, shear_v}
  */
-template <typename L>
-[[nodiscard]] constexpr WindComponents wind_shear(L layer, const float coord[],
-                                                  const float u_wind[],
-                                                  const float v_wind[],
-                                                  const std::ptrdiff_t N) {
+template <typename L, typename CoordPtr = const float*, typename UPtr = const float*, typename VPtr = const float*>
+[[nodiscard]] SHARP_HD constexpr inline WindComponents wind_shear(L layer, const CoordPtr coord,
+                                                                  const UPtr u_wind,
+                                                                  const VPtr v_wind,
+                                                                  const std::ptrdiff_t N) {
 #ifndef NO_QC
     if ((layer.bottom == MISSING) || (layer.top == MISSING))
         return {MISSING, MISSING};
@@ -415,10 +565,10 @@ template <typename L>
  *
  * \return  storm_relative_helicity
  */
-template <typename L>
-[[nodiscard]] float helicity(L layer, WindComponents storm_motion,
-                             const float coord[], const float u_wind[],
-                             const float v_wind[], const std::ptrdiff_t N) {
+template <typename L, typename CoordPtr = const float*, typename UPtr = const float*, typename VPtr = const float*>
+[[nodiscard]] SHARP_HD inline float helicity(L layer, WindComponents storm_motion,
+                                             const CoordPtr coord, const UPtr u_wind,
+                                             const VPtr v_wind, const std::ptrdiff_t N) {
 #ifndef NO_QC
     if ((storm_motion.u == MISSING) || (storm_motion.v == MISSING)) {
         return MISSING;
@@ -456,7 +606,7 @@ template <typename L>
     // will get set in first loop iter
     float sru_top;
     float srv_top;
-    float layer_helicity = 0.0;
+    float layer_helicity = 0.0f;
     for (std::ptrdiff_t k = layer_idx.kbot; k <= layer_idx.ktop; ++k) {
 #ifndef NO_QC
         if ((u_wind[k] == MISSING) || (v_wind[k] == MISSING)) {
@@ -492,40 +642,6 @@ template <typename L>
 
     return layer_helicity;
 }
-
-/// @cond DOXYGEN_IGNORE
-
-extern template WindComponents max_wind<PressureLayer>(PressureLayer lyr,
-                                                       const float coordinate[],
-                                                       const float u_wind[],
-                                                       const float v_wind[],
-                                                       const std::ptrdiff_t N);
-
-extern template WindComponents max_wind<HeightLayer>(HeightLayer lyr,
-                                                     const float coordinate[],
-                                                     const float u_wind[],
-                                                     const float v_wind[],
-                                                     const std::ptrdiff_t N);
-
-extern template WindComponents wind_shear<PressureLayer>(
-    PressureLayer layer, const float coord[], const float u_wind[],
-    const float v_wind[], const std::ptrdiff_t N);
-
-extern template WindComponents wind_shear<HeightLayer>(HeightLayer layer,
-                                                       const float coord[],
-                                                       const float u_wind[],
-                                                       const float v_wind[],
-                                                       const std::ptrdiff_t N);
-
-extern template float helicity<PressureLayer>(
-    PressureLayer layer, WindComponents storm_motion, const float coord[],
-    const float u_wind[], const float v_wind[], const std::ptrdiff_t N);
-
-extern template float helicity<HeightLayer>(
-    HeightLayer layer, WindComponents storm_motion, const float coord[],
-    const float u_wind[], const float v_wind[], const std::ptrdiff_t N);
-
-/// @endcond
 
 }  // end namespace sharp
 

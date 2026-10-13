@@ -14,6 +14,8 @@
 #ifndef SHARP_ALGORITHMS_H
 #define SHARP_ALGORITHMS_H
 
+#include <SHARPlib/constants.h>
+
 #include <cstddef>
 #include <functional>
 
@@ -46,8 +48,8 @@ namespace sharp {
  *
  * \return  Index of lower bound
  */
-template <typename T, typename C = std::less<>>
-[[nodiscard]] constexpr std::ptrdiff_t lower_bound(const T array[],
+template <typename Array, typename T, typename C = std::less<>>
+[[nodiscard]] SHARP_HD constexpr std::ptrdiff_t lower_bound(const Array array,
                                                    const std::ptrdiff_t N,
                                                    const T value,
                                                    const C cmp = C{}) {
@@ -87,8 +89,8 @@ template <typename T, typename C = std::less<>>
  *
  * \return  Index of the upper bound
  */
-template <typename T, typename C = std::less<>>
-[[nodiscard]] constexpr std::ptrdiff_t upper_bound(const T array[],
+template <typename Array, typename T, typename C = std::less<>>
+[[nodiscard]] SHARP_HD constexpr std::ptrdiff_t upper_bound(const Array array,
                                                    const std::ptrdiff_t N,
                                                    const T value,
                                                    const C cmp = C{}) {
@@ -122,7 +124,7 @@ template <typename T, typename C = std::less<>>
  * \return  The area under the curve
  */
 template <typename _T>
-[[nodiscard]] inline constexpr _T _integ_trapz(_T var_top, _T var_bottom,
+[[nodiscard]] SHARP_HD inline constexpr _T _integ_trapz(_T var_top, _T var_bottom,
                                                _T coord_top, _T coord_bottom,
                                                _T& weights,
                                                const bool weighted = false) {

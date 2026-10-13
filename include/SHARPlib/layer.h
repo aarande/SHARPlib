@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <stdexcept>
 
 namespace sharp {
 
@@ -79,11 +80,7 @@ struct HeightLayer {
      *
      * Sets the top and bottom to sharp::MISSING
      */
-    HeightLayer() {
-        bottom = MISSING;
-        top = MISSING;
-        delta = 100.0;
-    }
+    SHARP_HD constexpr HeightLayer() : bottom(MISSING), top(MISSING), delta(100.0f) {}
 
     /**
      * \brief Constructs a sharp::HeightLayer
@@ -93,7 +90,29 @@ struct HeightLayer {
      * \param   delta   (height increment, meters)
      *
      */
-    HeightLayer(float bot, float top, float delta = 100.0);
+    SHARP_HD inline HeightLayer(float bot, float top, float delta = 100.0f) {
+#ifndef __CUDA_ARCH__
+        if ((std::isnan(bot)) || (std::isnan(top))) {
+            throw std::range_error(
+                "RangeError: NaNs are not a valid range option for a HeightLayer.");
+        }
+        if ((std::isinf(bot)) || (std::isinf(top))) {
+            throw std::range_error(
+                "RangeError: infs are not a valid range option for a HeightLayer.");
+        }
+        if ((bot == MISSING) != (top == MISSING)) {
+            throw std::range_error(
+                "RangeError: Both bottom and top must be MISSING, or neither can be.");
+        }
+        if (bot > top) {
+            throw std::range_error(
+                "RangeError: The top of the height layer must be > the bottom of the height layer.");
+        }
+#endif
+        this->bottom = bot;
+        this->top = top;
+        this->delta = delta;
+    }
 };
 
 /**
@@ -128,11 +147,7 @@ struct PressureLayer {
      *
      * Sets the top and bottom to sharp::MISSING
      */
-    PressureLayer() {
-        bottom = MISSING;
-        top = MISSING;
-        delta = -1000.0;
-    }
+    SHARP_HD constexpr PressureLayer() : bottom(MISSING), top(MISSING), delta(-1000.0f) {}
 
     /**
      * \brief Constructs a sharp::PressureLayer
@@ -142,7 +157,29 @@ struct PressureLayer {
      * \param   delta   (pressure increment, Pa)
      *
      */
-    PressureLayer(float bot, float top, float delta = -1000.0);
+    SHARP_HD inline PressureLayer(float bot, float top, float delta = -1000.0f) {
+#ifndef __CUDA_ARCH__
+        if ((std::isnan(bot)) || (std::isnan(top))) {
+            throw std::range_error(
+                "RangeError: NaNs are not a valid range option for a PressureLayer.");
+        }
+        if ((std::isinf(bot)) || (std::isinf(top))) {
+            throw std::range_error(
+                "RangeError: infs are not a valid range option for a PressureLayer.");
+        }
+        if ((bot == MISSING) != (top == MISSING)) {
+            throw std::range_error(
+                "RangeError: Both bottom and top must be MISSING, or neither can be.");
+        }
+        if (bot < top) {
+            throw std::range_error(
+                "RangeError: The bottom of the pressure layer must be > the top of the pressure layer.");
+        }
+#endif
+        this->bottom = bot;
+        this->top = top;
+        this->delta = delta;
+    }
 };
 
 /**
@@ -193,9 +230,9 @@ struct LayerIndex {
  *
  * \return  {kbot, ktop}
  */
-template <typename L, typename Cb, typename Ct>
-[[nodiscard]] constexpr LayerIndex get_layer_index(L& layer,
-                                                   const float coord[],
+template <typename L, typename CoordPtr, typename Cb, typename Ct>
+[[nodiscard]] SHARP_HD constexpr LayerIndex get_layer_index(L& layer,
+                                                   const CoordPtr coord,
                                                    const std::ptrdiff_t N,
                                                    const Cb bottom_comp,
                                                    const Ct top_comp) {
@@ -242,9 +279,15 @@ template <typename L, typename Cb, typename Ct>
  *
  * \return  {kbot, ktop}
  */
-[[nodiscard]] LayerIndex get_layer_index(PressureLayer& layer,
-                                         const float pressure[],
-                                         const std::ptrdiff_t N);
+template <typename CoordPtr = const float*>
+[[nodiscard]] SHARP_HD inline LayerIndex get_layer_index(PressureLayer& layer,
+                                                         const CoordPtr pressure,
+                                                         const std::ptrdiff_t N) {
+    constexpr auto bottom_comp = std::greater<float>();
+    constexpr auto top_comp = std::less<float>();
+
+    return get_layer_index(layer, pressure, N, bottom_comp, top_comp);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -269,9 +312,15 @@ template <typename L, typename Cb, typename Ct>
  *
  * \return  {kbot, ktop}
  */
-[[nodiscard]] LayerIndex get_layer_index(HeightLayer& layer,
-                                         const float height[],
-                                         const std::ptrdiff_t N);
+template <typename CoordPtr = const float*>
+[[nodiscard]] SHARP_HD inline LayerIndex get_layer_index(HeightLayer& layer,
+                                                         const CoordPtr height,
+                                                         const std::ptrdiff_t N) {
+    constexpr auto bottom_comp = std::less<float>();
+    constexpr auto top_comp = std::greater<float>();
+
+    return get_layer_index(layer, height, N, bottom_comp, top_comp);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -293,11 +342,24 @@ template <typename L, typename Cb, typename Ct>
  *
  * \return  {bottom, top}
  */
-[[nodiscard]] PressureLayer height_layer_to_pressure(HeightLayer layer,
-                                                     const float pressure[],
-                                                     const float height[],
-                                                     const std::ptrdiff_t N,
-                                                     const bool isAGL = false);
+template <typename PresPtr = const float*, typename HghtPtr = const float*>
+[[nodiscard]] SHARP_HD inline PressureLayer height_layer_to_pressure(
+    HeightLayer layer, const PresPtr pressure, const HghtPtr height,
+    const std::ptrdiff_t N, const bool isAGL = false) {
+    if (isAGL) {
+        layer.bottom += height[0];
+        layer.top += height[0];
+    }
+
+    if ((layer.bottom < height[0]) || (layer.top > height[N - 1])) {
+        return {MISSING, MISSING};
+    }
+
+    const float pbot = interp_height(layer.bottom, height, pressure, N);
+    const float ptop = interp_height(layer.top, height, pressure, N);
+
+    return {pbot, ptop};
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -319,11 +381,24 @@ template <typename L, typename Cb, typename Ct>
  *
  * \return  {bottom, top}
  */
-[[nodiscard]] HeightLayer pressure_layer_to_height(PressureLayer layer,
-                                                   const float pressure[],
-                                                   const float height[],
-                                                   const std::ptrdiff_t N,
-                                                   const bool toAGL = false);
+template <typename PresPtr = const float*, typename HghtPtr = const float*>
+[[nodiscard]] SHARP_HD inline HeightLayer pressure_layer_to_height(
+    PressureLayer layer, const PresPtr pressure, const HghtPtr height,
+    const std::ptrdiff_t N, const bool toAGL = false) {
+    if ((layer.bottom > pressure[0]) || (layer.top < pressure[N - 1])) {
+        return {MISSING, MISSING};
+    }
+
+    float zbot = interp_pressure(layer.bottom, pressure, height, N);
+    float ztop = interp_pressure(layer.top, pressure, height, N);
+
+    if (toAGL) {
+        zbot -= height[0];
+        ztop -= height[0];
+    }
+
+    return {zbot, ztop};
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -353,9 +428,9 @@ template <typename L, typename Cb, typename Ct>
  *
  * \return  minmax_value
  */
-template <typename L, typename C>
-[[nodiscard]] constexpr float layer_minmax(L layer, const float coord_arr[],
-                                           const float data_arr[],
+template <typename L, typename CoordPtr, typename DataPtr, typename C>
+[[nodiscard]] SHARP_HD constexpr float layer_minmax(L layer, const CoordPtr coord_arr,
+                                           const DataPtr data_arr,
                                            const std::ptrdiff_t N,
                                            float* lvl_min_or_max,
                                            const C comp) {
@@ -448,9 +523,9 @@ template <typename L, typename C>
  * \return  layer_min
  *
  */
-template <typename L>
-constexpr float layer_min(L layer, const float coord_arr[],
-                          const float data_arr[], const std::ptrdiff_t N,
+template <typename L, typename CoordPtr = const float*, typename DataPtr = const float*>
+SHARP_HD constexpr float layer_min(L layer, const CoordPtr coord_arr,
+                          const DataPtr data_arr, const std::ptrdiff_t N,
                           float* lvl_of_min = nullptr) {
     constexpr auto comp = std::less<float>();
     return layer_minmax(layer, coord_arr, data_arr, N, lvl_of_min, comp);
@@ -481,9 +556,9 @@ constexpr float layer_min(L layer, const float coord_arr[],
  *
  * \return  layer_max
  */
-template <typename L>
-constexpr float layer_max(L layer, const float coord_arr[],
-                          const float data_arr[], const std::ptrdiff_t N,
+template <typename L, typename CoordPtr = const float*, typename DataPtr = const float*>
+SHARP_HD constexpr float layer_max(L layer, const CoordPtr coord_arr,
+                          const DataPtr data_arr, const std::ptrdiff_t N,
                           float* lvl_of_max = nullptr) {
     constexpr auto comp = std::greater<float>();
     return layer_minmax(layer, coord_arr, data_arr, N, lvl_of_max, comp);
@@ -510,12 +585,12 @@ constexpr float layer_max(L layer, const float coord_arr[],
  *
  * \return  integrated_value
  */
-template <typename L>
-[[nodiscard]] float integrate_layer_trapz(L layer, const float var_array[],
-                                          const float coord_array[],
-                                          const std::ptrdiff_t N,
-                                          const int integ_sign = 0,
-                                          const bool weighted = false) {
+template <typename L, typename VarPtr = const float*, typename CoordPtr = const float*>
+[[nodiscard]] SHARP_HD inline float integrate_layer_trapz(L layer, const VarPtr var_array,
+                                                          const CoordPtr coord_array,
+                                                          const std::ptrdiff_t N,
+                                                          const int integ_sign = 0,
+                                                          const bool weighted = false) {
     float integrated = 0.0;
     float weights = 0.0;
 
@@ -628,8 +703,25 @@ template <typename L>
  *
  * \return  layer_mean
  */
-[[nodiscard]] float layer_mean(PressureLayer layer, const float pressure[],
-                               const float data_arr[], const std::ptrdiff_t N);
+template <typename PresPtr = const float*, typename DataPtr = const float*>
+[[nodiscard]] SHARP_HD inline float layer_mean(PressureLayer layer, const PresPtr pressure,
+                                               const DataPtr data_arr, const std::ptrdiff_t N) {
+#ifndef NO_QC
+    if ((layer.bottom == MISSING) || (layer.top == MISSING)) {
+        return MISSING;
+    }
+#endif
+
+    if (layer.bottom > pressure[0]) {
+        layer.bottom = pressure[0];
+    }
+
+    if (layer.top < pressure[N - 1]) {
+        layer.top = pressure[N - 1];
+    }
+
+    return integrate_layer_trapz(layer, data_arr, pressure, N, 0, true);
+}
 
 /**
  * \author Kelton Halbert - NWS Storm Prediction Center
@@ -651,46 +743,39 @@ template <typename L>
  *
  * \return  layer_mean
  */
-[[nodiscard]] float layer_mean(HeightLayer layer, const float height[],
-                               const float pressure[], const float data_arr[],
-                               const std::ptrdiff_t N,
-                               const bool isAGL = false);
-
-/// @cond DOXYGEN_IGNORE
-
-extern template float layer_min<PressureLayer>(PressureLayer layer,
-                                               const float coord_arr[],
-                                               const float data_arr[],
+template <typename HghtPtr = const float*, typename PresPtr = const float*, typename DataPtr = const float*>
+[[nodiscard]] SHARP_HD inline float layer_mean(HeightLayer layer, const HghtPtr height,
+                                               const PresPtr pressure, const DataPtr data_arr,
                                                const std::ptrdiff_t N,
-                                               float* lvl_of_min);
+                                               const bool isAGL = false) {
+#ifndef NO_QC
+    if ((layer.bottom == MISSING) || (layer.top == MISSING)) {
+        return MISSING;
+    }
+#endif
 
-extern template float layer_min<HeightLayer>(HeightLayer layer,
-                                             const float coord_arr[],
-                                             const float data_arr[],
-                                             const std::ptrdiff_t N,
-                                             float* lvl_of_min);
+    if (isAGL) {
+        layer.bottom += height[0];
+        layer.top += height[0];
+    }
 
-extern template float layer_max<PressureLayer>(PressureLayer layer,
-                                               const float coord_arr[],
-                                               const float data_arr[],
-                                               const std::ptrdiff_t N,
-                                               float* lvl_of_max);
+    if (layer.bottom < height[0]) {
+        layer.bottom = height[0];
+    }
 
-extern template float layer_max<HeightLayer>(HeightLayer layer,
-                                             const float coord_arr[],
-                                             const float data_arr[],
-                                             const std::ptrdiff_t N,
-                                             float* lvl_of_max);
+    if (layer.top > height[N - 1]) {
+        layer.top = height[N - 1];
+    }
 
-extern template float integrate_layer_trapz<PressureLayer>(
-    PressureLayer layer, const float var_array[], const float coord_array[],
-    const std::ptrdiff_t N, const int integ_sign, const bool weighted);
+    // Each end is clipped only against its own edge of the profile, so a
+    // layer wholly outside it comes out inverted. Not a QC check.
+    if (layer.bottom > layer.top) return MISSING;
 
-extern template float integrate_layer_trapz<HeightLayer>(
-    HeightLayer layer, const float var_array[], const float coord_array[],
-    const std::ptrdiff_t N, const int integ_sign, const bool weighted);
+    PressureLayer pres_layer =
+        height_layer_to_pressure(layer, pressure, height, N, false);
 
-/// @endcond
+    return integrate_layer_trapz(pres_layer, data_arr, pressure, N, 0, true);
+}
 
 }  // end namespace sharp
 
