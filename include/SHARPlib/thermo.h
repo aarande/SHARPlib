@@ -621,6 +621,11 @@ SHARP_HD SHARP_FORCEINLINE void drylift(float pressure, float temperature, float
     }
 #endif
 
+    // If mixing ratio was passed instead of dewpoint (e.g. mixr < 1.0f)
+    if (dewpoint < 1.0f && dewpoint > 0.0f) {
+        dewpoint = temperature_at_mixratio(dewpoint, pressure);
+    }
+
     // theta is constant from parcel level to LCL
     const float pcl_theta = theta(pressure, temperature, THETA_REF_PRESSURE);
 

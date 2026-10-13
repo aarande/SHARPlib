@@ -73,7 +73,7 @@ struct lifter_wobus {
      * ice mixing ratios. The Wobus lifter does not require
      * this, however, so this function does nothing.
      */
-    inline void setup([[maybe_unused]] const float lcl_pres,
+    SHARP_HD inline void setup([[maybe_unused]] const float lcl_pres,
                       [[maybe_unused]] const float lcl_tmpk) const {}
 
     /**
@@ -84,7 +84,7 @@ struct lifter_wobus {
      *
      * \return  The temperature of the lifted parcel
      */
-    [[nodiscard]] inline float operator()(const float pres, const float tmpk,
+    [[nodiscard]] SHARP_HD inline float operator()(const float pres, const float tmpk,
                                           const float new_pres) const {
         return wetlift(pres, tmpk, new_pres, converge);
     }
@@ -96,7 +96,7 @@ struct lifter_wobus {
      *
      * \return  The virtual temperature of the parcel
      */
-    [[nodiscard]] inline float parcel_virtual_temperature(
+    [[nodiscard]] SHARP_HD inline float parcel_virtual_temperature(
         const float pres, const float tmpk) const {
         return virtual_temperature(tmpk, mixratio(pres, tmpk));
     }
