@@ -79,6 +79,8 @@ install(
     DIRECTORY "${CMAKE_SOURCE_DIR}/src/nanobind/nwsspc/sharp/"
     DESTINATION "nwsspc/sharp"
     FILES_MATCHING
+        PATTERN "*.py"
         PATTERN "*.pyi"
         PATTERN "py.typed"
 )
+

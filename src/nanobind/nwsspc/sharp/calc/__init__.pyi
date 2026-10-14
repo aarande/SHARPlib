@@ -8,6 +8,9 @@ from . import (
     thermo as thermo,
     winds as winds
 )
+from .gpu import compute_sounding_grid as compute_sounding_grid
 
+
+SUPPORTED_PARAMS: tuple = ...
 
 __version_tuple__: tuple = (1, 4, 3)
