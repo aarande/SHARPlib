@@ -48,7 +48,7 @@ _deps
 *.app
 
 # Ignore the build directory
-build/
+build*/
 dist/
 *.egg-info/
 var/

@@ -34,7 +34,7 @@ namespace detail {
 
 template <typename Lifter, typename PtrPres, typename PtrVtmpk>
 struct ParcelBuoyancyAccessor {
-    Lifter lifter;
+    Lifter& lifter;
     float lcl_pres;
     float lcl_tmpk;
     float thetav_lcl;
@@ -77,7 +77,7 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
     float lcl_tmpk = MISSING;
     sharp::drylift(pcl_pres, pcl_tmpk, pcl_mixr, lcl_pres, lcl_tmpk);
 
-    if (sharp::is_missing(lcl_pres) || std::isnan(lcl_pres) || lcl_pres <= pres[N_z - 1]) {
+    if (sharp::is_missing(lcl_pres) || (lcl_pres != lcl_pres) || lcl_pres <= pres[N_z - 1]) {
         return out;
     }
 
@@ -93,6 +93,8 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
     PressureLayer sat_lyr = {lcl_pres, pres[N_z - 1]};
     LayerIndex dry_idx = sharp::get_layer_index(dry_lyr, pres, N_z);
     LayerIndex sat_idx = sharp::get_layer_index(sat_lyr, pres, N_z);
+
+    lifter.setup(lcl_pres, lcl_tmpk);
 
     detail::ParcelBuoyancyAccessor<Lifter, PtrPres, PtrVtmpk> buoy_accessor{
         lifter, lcl_pres, lcl_tmpk, thetav_lcl,
@@ -112,8 +114,6 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
     float lfc_pres_final = MISSING;
     float eql_pres_final = MISSING;
     bool in_pos_area = (buoy_bot > 0.0f);
-
-    lifter.setup(lcl_pres, lcl_tmpk);
 
     for (std::ptrdiff_t k = sat_idx.kbot; k < sat_idx.ktop + 1; ++k) {
 #ifndef NO_QC

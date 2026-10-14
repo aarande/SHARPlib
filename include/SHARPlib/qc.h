@@ -30,7 +30,11 @@ namespace sharp {
  * \return  Whether value is sharp::MISSING or NaN
  */
 [[nodiscard]] SHARP_HD SHARP_FORCEINLINE bool is_missing(const float value) {
+#if defined(__CUDA_ARCH__)
+    return (value == MISSING) || (value != value);
+#else
     return !std::islessgreater(value, MISSING);
+#endif
 }
 
 }  // namespace sharp

@@ -594,7 +594,7 @@ template <typename L, typename VarPtr = const float*, typename CoordPtr = const 
     float integrated = 0.0;
     float weights = 0.0;
 
-    const bool isign = std::signbit(integ_sign);
+    const bool isign = (integ_sign < 0);
 
     LayerIndex idx = get_layer_index(layer, coord_array, N);
 
@@ -602,7 +602,7 @@ template <typename L, typename VarPtr = const float*, typename CoordPtr = const 
     float var_lyr_top;
 
     auto include = [integ_sign, isign](float layer_avg) -> float {
-        return (float)((!integ_sign) | (isign == std::signbit(layer_avg)));
+        return (float)((!integ_sign) | (isign == (layer_avg < 0.0f)));
     };
 
     if constexpr (layer.coord == LayerCoordinate::height) {

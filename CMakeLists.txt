@@ -30,13 +30,36 @@ option(BUILD_PYBIND "Build python bindings with nanobind" OFF)
 option(NO_QC "Disable QC checks for missing/NaN values in SHARPlib" OFF)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON) 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(SHARP_ENABLE_CUDA "Enable CUDA GPU batch acceleration" OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS 
     "src/SHARPlib/*.cpp" 
 )
 
+if(SHARP_ENABLE_CUDA)
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES "75;80;86;89;90")
+    endif()
+    file(GLOB_RECURSE CUDA_SOURCES CONFIGURE_DEPENDS
+        "src/SHARPlib/gpu/*.cu"
+    )
+    list(APPEND SOURCES ${CUDA_SOURCES})
+endif()
+
 add_library(SHARPlib ${SOURCES})
+
+if(SHARP_ENABLE_CUDA)
+    target_compile_definitions(SHARPlib PUBLIC -DSHARP_HAS_CUDA=1)
+    target_compile_options(SHARPlib PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr;--use_fast_math;-Xptxas=-v;--maxrregcount=64>
+    )
+    target_link_libraries(SHARPlib PUBLIC CUDA::cudart)
+endif()
 
 target_compile_definitions(SHARPlib PUBLIC 
     $<BUILD_INTERFACE:FMT_HEADER_ONLY>
@@ -55,11 +78,10 @@ set_target_properties(SHARPlib PROPERTIES
 )
 
 if(MSVC)
-    target_compile_options(SHARPlib PUBLIC /EHsc)
+    target_compile_options(SHARPlib PUBLIC $<$<COMPILE_LANGUAGE:CXX>:/EHsc>)
     target_compile_options(SHARPlib PRIVATE
-        /W3 /utf-8 /fp:precise
-        /wd4244 /wd4305
-        $<$<BOOL:${WARNINGS_AS_ERRORS}>:/WX>
+        $<$<COMPILE_LANGUAGE:CXX>:/W3;/utf-8;/fp:precise;/wd4244;/wd4305>
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<BOOL:${WARNINGS_AS_ERRORS}>>:/WX>
     )
 else()
     target_compile_options(SHARPlib PRIVATE

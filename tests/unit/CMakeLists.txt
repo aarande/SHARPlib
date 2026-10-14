@@ -26,6 +26,16 @@ add_executable(test_sharp_algs EXCLUDE_FROM_ALL test_algorithms.cpp)
 target_link_libraries(test_sharp_algs SHARPlib) 
 add_test(NAME sharp_algs COMMAND test_sharp_algs)
 
+if(SHARP_ENABLE_CUDA)
+    add_executable(test_cuda_batch EXCLUDE_FROM_ALL test_cuda_batch.cu)
+    target_link_libraries(test_cuda_batch SHARPlib CUDA::cudart)
+    target_compile_options(test_cuda_batch PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr;--use_fast_math;-Xptxas=-v;--maxrregcount=64>
+    )
+    add_test(NAME test_cuda_batch COMMAND test_cuda_batch)
+    list(APPEND SHARP_TEST_TARGETS test_cuda_batch)
+endif()
+
 ## This aggregates all of the executable names into a single 
 ## target for building and testing
 add_dependencies(SHARPlib_tests ${SHARP_TEST_TARGETS} test_sharp_algs test_sharp_no_qc_propagation)
