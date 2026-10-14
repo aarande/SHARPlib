@@ -28,6 +28,7 @@ struct ConvectiveOutput {
     float lcl_pres = MISSING;
     float lfc_pres = MISSING;
     float el_pres = MISSING;
+    float cape_3km = 0.0f;
 };
 
 namespace detail {
@@ -104,7 +105,9 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
 
     // Find LFC and EL (matching sharp::Parcel::find_lfc_el)
     float pos_buoy = 0.0f;
+    float pos_buoy_3km = 0.0f;
     float pos_buoy_max = 0.0f;
+    float pos_buoy_3km_final = 0.0f;
     float pbot = sat_lyr.bottom;
     float buoy_bot = sharp::interp_pressure(sat_lyr.bottom, pres, buoy_accessor, N_z);
     float hbot = lcl_hght;
@@ -114,6 +117,7 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
     float lfc_pres_final = MISSING;
     float eql_pres_final = MISSING;
     bool in_pos_area = (buoy_bot > 0.0f);
+    const float z_3km = hght[0] + 3000.0f;
 
     for (std::ptrdiff_t k = sat_idx.kbot; k < sat_idx.ktop + 1; ++k) {
 #ifndef NO_QC
@@ -126,6 +130,7 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
 
         if (!in_pos_area && (buoy_bot <= 0.0f) && (buoy_top > 0.0f)) {
             pos_buoy = 0.0f;
+            pos_buoy_3km = 0.0f;
             eql_pres = MISSING;
             in_pos_area = true;
 
@@ -140,7 +145,18 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
         }
 
         const float condition = (in_pos_area && (lyr_top > 0.0f)) ? 1.0f : 0.0f;
-        pos_buoy += condition * lyr_top * (htop - hbot);
+        const float dz = htop - hbot;
+        pos_buoy += condition * lyr_top * dz;
+
+        if (condition > 0.0f) {
+            if (htop <= z_3km) {
+                pos_buoy_3km += lyr_top * dz;
+            } else if (hbot < z_3km) {
+                float frac = (z_3km - hbot) / dz;
+                float buoy_3k = buoy_bot + frac * (buoy_top - buoy_bot);
+                pos_buoy_3km += 0.5f * (buoy_bot + buoy_3k) * (z_3km - hbot);
+            }
+        }
 
         if (in_pos_area && ((buoy_bot >= 0.0f) && (buoy_top < 0.0f))) {
             in_pos_area = false;
@@ -155,6 +171,7 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
                 pos_buoy_max = pos_buoy;
                 lfc_pres_final = lfc_pres;
                 eql_pres_final = eql_pres;
+                pos_buoy_3km_final = pos_buoy_3km;
             }
         }
         pbot = ptop;
@@ -168,12 +185,14 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
             pos_buoy_max = pos_buoy;
             lfc_pres_final = lfc_pres;
             eql_pres_final = eql_pres;
+            pos_buoy_3km_final = pos_buoy_3km;
         }
     }
 
     if (pos_buoy_max > 0.0f) {
         out.lfc_pres = lfc_pres_final;
         out.el_pres = eql_pres_final;
+        out.cape_3km = pos_buoy_3km_final;
     }
 
     if (out.lfc_pres != MISSING) {
@@ -195,6 +214,10 @@ SHARP_HD inline ConvectiveOutput lift_and_integrate_column(
 
         out.lfc_hght_agl = lfc_el_ht.bottom - hght[0];
         out.el_hght_agl = lfc_el_ht.top - hght[0];
+
+        if (pos_buoy_max > 0.0f && out.cape > 0.0f) {
+            out.cape_3km = out.cape * (pos_buoy_3km_final / pos_buoy_max);
+        }
     }
 
     return out;

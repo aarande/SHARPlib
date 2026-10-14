@@ -12,6 +12,90 @@
 
 namespace sharp::gpu {
 
+struct ConvectiveBatchOutputs {
+    // Surface-Based (SB)
+    float* sbcape = nullptr;
+    float* sbcin = nullptr;
+    float* sblcl_hght_agl = nullptr;
+    float* sblcl_pres = nullptr;
+    float* sblfc_hght_agl = nullptr;
+    float* sblfc_pres = nullptr;
+    float* sbel_hght_agl = nullptr;
+    float* sbel_pres = nullptr;
+    float* sb3cape = nullptr;
+
+    // Mixed-Layer (ML - 100 hPa)
+    float* mlcape = nullptr;
+    float* mlcin = nullptr;
+    float* mllcl_hght_agl = nullptr;
+    float* mllcl_pres = nullptr;
+    float* mllfc_hght_agl = nullptr;
+    float* mllfc_pres = nullptr;
+    float* mlel_hght_agl = nullptr;
+    float* mlel_pres = nullptr;
+    float* ml3cape = nullptr;
+
+    // Most-Unstable (MU - within 300 hPa)
+    float* mucape = nullptr;
+    float* mucin = nullptr;
+    float* mulcl_hght_agl = nullptr;
+    float* mulcl_pres = nullptr;
+    float* mulfc_hght_agl = nullptr;
+    float* mulfc_pres = nullptr;
+    float* muel_hght_agl = nullptr;
+    float* muel_pres = nullptr;
+    float* mu3cape = nullptr;
+
+    // Kinematics & Storm Motion
+    float* bunkers_rm_u = nullptr;
+    float* bunkers_rm_v = nullptr;
+    float* bunkers_lm_u = nullptr;
+    float* bunkers_lm_v = nullptr;
+    float* mean_wind_u = nullptr;
+    float* mean_wind_v = nullptr;
+    float* shr01 = nullptr;
+    float* shr03 = nullptr;
+    float* shr06 = nullptr;
+    float* srh01 = nullptr;
+    float* srh03 = nullptr;
+    float* srh05 = nullptr;
+    float* crit_angle = nullptr;
+
+    // Thermodynamics & Moisture
+    float* pwat = nullptr;
+    float* lr03 = nullptr;
+    float* lr36 = nullptr;
+    float* lr75 = nullptr;
+    float* fz_level_agl = nullptr;
+    float* wbz_level_agl = nullptr;
+
+    // Composite Severe Indices
+    float* stp = nullptr;
+    float* scp = nullptr;
+    float* ehi01 = nullptr;
+    float* ehi03 = nullptr;
+};
+
+/**
+ * \brief Launch a batched convective analysis kernel across 2D [n_levels, n_profiles] soundings with flexible outputs.
+ *
+ * All pointer inputs are assumed to point to level-major contiguous device memory
+ * of shape [n_levels, n_profiles] where the value for level k of profile idx is at
+ * ptr[k * n_profiles + idx].
+ *
+ * All non-null pointers in outputs point to 1D device arrays of size [n_profiles].
+ * Null pointers are skipped with selective execution pruning.
+ */
+void launch_convective_batch_flexible(
+    const float* d_pres, const float* d_hght, const float* d_tmpk, const float* d_dwpk,
+    const float* d_u, const float* d_v,
+    const ConvectiveBatchOutputs& outputs,
+    int n_levels, int n_profiles,
+    bool use_texture_lut,
+    bool fast_mu_thetae,
+    cudaStream_t stream = 0
+);
+
 /**
  * \brief Launch a batched convective analysis kernel across 2D [n_levels, n_profiles] soundings.
  *
