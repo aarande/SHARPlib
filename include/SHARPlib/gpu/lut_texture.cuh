@@ -25,12 +25,29 @@ struct lifter_texture_gpu {
     float inv_dlog_p = 0.0f;
     float thetae_min = 0.0f;
     float inv_dthetae = 0.0f;
-    float cached_thetae = 0.0f;
+    float cached_v = -1.0f;
 
     static constexpr bool lift_from_lcl = true;
 
     SHARP_HD inline void setup(const float lcl_pres, const float lcl_tmpk) noexcept {
-        cached_thetae = sharp::thetae(lcl_pres, lcl_tmpk, lcl_tmpk);
+#if defined(__CUDA_ARCH__)
+        float u = (std::log(lcl_pres) - log_p_max) * inv_dlog_p;
+        float v_lo = 0.0f;
+        float v_hi = 255.0f;
+        for (int step = 0; step < 16; ++step) {
+            float v_mid = 0.5f * (v_lo + v_hi);
+            float t_val = tex2D<float>(tex, u + 0.5f, v_mid + 0.5f);
+            if (t_val > lcl_tmpk) {
+                v_hi = v_mid;
+            } else {
+                v_lo = v_mid;
+            }
+        }
+        cached_v = 0.5f * (v_lo + v_hi);
+#else
+        (void)lcl_pres;
+        (void)lcl_tmpk;
+#endif
     }
 
     SHARP_HD inline float operator()(
@@ -38,11 +55,23 @@ struct lifter_texture_gpu {
         [[maybe_unused]] float tmpk_start,
         float pres_end) const noexcept {
 #if defined(__CUDA_ARCH__)
-        float th_e = (cached_thetae > 0.0f) ? cached_thetae : sharp::thetae(pres_start, tmpk_start, tmpk_start);
+        float v = cached_v;
+        if (v < 0.0f) {
+            float u_start = (std::log(pres_start) - log_p_max) * inv_dlog_p;
+            float v_lo = 0.0f, v_hi = 255.0f;
+            for (int step = 0; step < 16; ++step) {
+                float v_mid = 0.5f * (v_lo + v_hi);
+                float t_val = tex2D<float>(tex, u_start + 0.5f, v_mid + 0.5f);
+                if (t_val > tmpk_start) v_hi = v_mid; else v_lo = v_mid;
+            }
+            v = 0.5f * (v_lo + v_hi);
+        }
         float u = (std::log(pres_end) - log_p_max) * inv_dlog_p;
-        float v = (th_e - thetae_min) * inv_dthetae;
         return tex2D<float>(tex, u + 0.5f, v + 0.5f);
 #else
+        (void)pres_start;
+        (void)tmpk_start;
+        (void)pres_end;
         return MISSING;
 #endif
     }

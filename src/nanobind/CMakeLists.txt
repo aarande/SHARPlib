@@ -30,7 +30,12 @@ include_directories(${CMAKE_SOURCE_DIR}/external/fmt/include)
 include_directories("${CMAKE_BINARY_DIR}/include")
 
 
-nanobind_add_module(calc LTO calc.cpp)
+set(CALC_SOURCES calc.cpp)
+if (SHARP_ENABLE_CUDA)
+    list(APPEND CALC_SOURCES gpu_bindings.cpp)
+endif()
+
+nanobind_add_module(calc LTO ${CALC_SOURCES})
 target_link_libraries(calc PRIVATE SHARPlib)
 if (MSVC) # For MSVC (cl) compiler
     # Add compile options for MSVC
@@ -43,18 +48,24 @@ set_target_properties(calc PROPERTIES
 )
 
 if(NOT DEFINED ENV{CONDA_BUILD})
+    set(CALC_STUB_OUTPUTS
+        __init__.pyi 
+        interp.pyi 
+        layer.pyi
+        params.pyi 
+        parcel.pyi
+        thermo.pyi
+        winds.pyi
+    )
+    if (SHARP_ENABLE_CUDA)
+        list(APPEND CALC_STUB_OUTPUTS gpu.pyi)
+    endif()
     nanobind_add_stub(
         calc_stub
         RECURSIVE
         MODULE nwsspc.sharp.calc
         OUTPUT 
-            __init__.pyi 
-            interp.pyi 
-            layer.pyi
-            params.pyi 
-            parcel.pyi
-            thermo.pyi
-            winds.pyi
+            ${CALC_STUB_OUTPUTS}
         OUTPUT_PATH "${CMAKE_SOURCE_DIR}/src/nanobind/nwsspc/sharp"
         PYTHON_PATH "$<TARGET_FILE_DIR:calc>/../../"
         MARKER_FILE "${CMAKE_SOURCE_DIR}/src/nanobind/nwsspc/sharp/py.typed"

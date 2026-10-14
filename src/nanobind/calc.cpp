@@ -10,6 +10,10 @@
 #include "parcel_bindings.h"
 #include "params_bindings.h"
 
+#if defined(SHARP_HAS_CUDA)
+void bind_gpu_submodule(nanobind::module_& m);
+#endif
+
 #include <SHARPlib/version.h>
 
 // clang-format on
@@ -25,6 +29,10 @@ NB_MODULE(calc, m) {
     make_winds_bindings(m);
     make_parcel_bindings(m);
     make_params_bindings(m);
+
+#if defined(SHARP_HAS_CUDA)
+    bind_gpu_submodule(m);
+#endif
 
     m.attr("__version__") = FULL_VERSION;
     m.attr("__version_tuple__") = std::make_tuple(

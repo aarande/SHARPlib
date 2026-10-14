@@ -146,7 +146,7 @@ lifter_texture_gpu MoistAdiabatTextureLUT::get_device_lifter() const noexcept {
     lifter.inv_dlog_p = m_inv_dlog_p;
     lifter.thetae_min = m_thetae_min;
     lifter.inv_dthetae = m_inv_dthetae;
-    lifter.cached_thetae = 0.0f;
+    lifter.cached_v = -1.0f;
     return lifter;
 }
 
