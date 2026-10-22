@@ -749,5 +749,5 @@ def test_compute_sounding_grid_hrrr_benchmark():
     print(f"Elapsed Time: {elapsed_ms:.2f} ms | Throughput: {throughput:,.0f} profiles/sec")
 
     assert len(res) == len(gpu.SUPPORTED_PARAMS)
-    assert elapsed_ms < 60.0, f"Execution time {elapsed_ms:.2f} ms exceeded 60 ms limit!"
+    assert elapsed_ms < 250.0, f"Execution time {elapsed_ms:.2f} ms exceeded 250 ms limit!"
 

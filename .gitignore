@@ -63,3 +63,9 @@ __pycache__/
 .pyd
 .pytest_cache/
 src/nanobind/_version.py
+
+# IDE and temporary outputs
+.idea/
+*.zarr/
+test_zarr.zarr/
+uv.lock
